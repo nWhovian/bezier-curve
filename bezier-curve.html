@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Bezier</title>
+    <script src="math.min.js"></script>
+</head>
+
+<body>
+
+<h1>Cubic Bézier curve</h1>
+
+<canvas id="canvas1" height="600" width="800" class="bezier" style="border:1px solid #d3d3d3;"></canvas>
+
+<input type="number" size="3" id="pointY" value=300>
+<br>
+<br>
+<span id="field"></span>
+
+<script type="text/javascript">
+
+    /*
+    * Part of this code is based on:
+        * http://blogs.sitepoint.com/html5-canvas-draw-quadratic-curves/
+        * http://blogs.sitepoint.com/html5-canvas-draw-bezier-curves/
+    */
+
+    var canvas1, context1, points, myTransformation, style, drag = null, draggedPoint, combinationArray, tArray;
+
+    points = [{x: 100, y: 300}, {x: 200, y: 300}, {x: 300, y: 300}, {x: 400, y: 300}];
+
+    var curves = [points];
+
+    var step = 1000;
+
+    var n = curves[0].length - 1;
+
+    function init() {
+
+        myTransformation = function (p) {
+            return p
+        }; //Identity transform
+
+        // default styles
+        style = {
+            curve: {width: 3, color: "#333"},
+            line: {width: 1, color: "#C00"},
+            point: {radius: 10, width: 2, color: "#900", fill: "rgba(200,200,200,0.5)", arc1: 0, arc2: 2 * Math.PI}
+        }
+        style1 = {
+            curve: {width: 3, color: "#4e0799"},
+        }
+
+        // line style defaults
+        context1.lineCap = "round";
+        context1.lineJoin = "round";
+
+        // event handlers (only canvas1)
+        canvas1.onmousedown = dragStart;
+        canvas1.onmousemove = dragging;
+        canvas1.onmouseup = canvas1.onmouseout = dragEnd;
+
+        buildArrays(50);
+        drawCanvas();
+    }
+
+
+    /**
+     Basic drawing methods
+     **/
+
+
+    // draw canvas
+    function drawCanvas() {
+        // Clear everything
+        context1.clearRect(0, 0, canvas1.width, canvas1.height);  // Clear canvas
+
+        // Background grids
+        drawGrid(context1, canvas1.width, canvas1.height); // Draw background grid
+
+        // Curve through points and vertices
+        for (var i = 0; i < curves.length; i++) {
+            drawCurve(context1, style, curves[i]); // Draw curve
+            drawVertices(context1, style, curves[i]); // Draw vertices as circles
+            drawBezier(context1, style1, curves[i]);
+        }
+        document.getElementById("field").innerHTML = field();
+    }
+
+
+    // Draw a background grid
+    function drawGrid(myContext, bw, bh) {
+        var delta = 50; // grid cell size
+
+        for (var x = 0; x <= bw; x += delta) {
+            myContext.moveTo(x, 0);
+            myContext.lineTo(x, bh);
+        }
+
+        for (var y = 0; y <= bh; y += delta) {
+            myContext.moveTo(0, y);
+            myContext.lineTo(bw, y);
+        }
+
+        myContext.lineWidth = 1;
+        myContext.strokeStyle = "lightgray";
+        myContext.stroke();
+
+        myContext.fillStyle = "black";
+        myContext.font = "12px Arial";
+        myContext.fillText("(0,0)", 2, 12);
+
+    }
+
+    // Draws a polygonal curve connecting the points, after applying the given transformation
+    function drawCurve(ctx, style, points, transformation) {
+        // The transformation is optional. If none provided, use identity transform
+        if (transformation === undefined) {
+            transformation = function (p) {
+                return p
+            }; //Identity transform
+        }
+
+        // Draw curve
+        ctx.lineWidth = style.curve.width;
+        ctx.strokeStyle = style.curve.color;
+        ctx.beginPath();
+        var firstPoint = transformation(points[0]);
+        var currentPoint;
+        ctx.moveTo(firstPoint.x, firstPoint.y);
+        for (var i = 0; i < points.length; i++) {
+            currentPoint = transformation(points[i]);
+            ctx.lineTo(currentPoint.x, currentPoint.y);
+            ctx.moveTo(currentPoint.x, currentPoint.y);
+        }
+        ctx.stroke();
+    }
+
+    // Draw circles around vertices to facilitate drag and drop
+    function drawVertices(ctx, style, points) {
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i];
+            ctx.lineWidth = style.point.width;
+            ctx.strokeStyle = style.point.color;
+            ctx.fillStyle = style.point.fill;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, style.point.radius, style.point.arc1, style.point.arc2, true);
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+
+    /**
+     Methods to allow dragging transformedPoints around
+     **/
+
+    // start dragging
+    function dragStart(e) {
+        e = mousePos(e);
+        var dx, dy;
+        for (var j = 0; j < curves.length; j++) {
+            points = curves[j];
+            for (var i = 0; i < points.length; i++) {
+                dx = points[i].x - e.x;
+                dy = points[i].y - e.y;
+                if ((dx * dx) + (dy * dy) < style.point.radius * style.point.radius) {
+                    drag = i;
+                    draggedPoint = e;
+                    canvas1.style.cursor = "move";
+                    return;
+                }
+            }
+        }
+    }
+
+    // dragging
+    function dragging(e) {
+        if (drag != null) {
+            e = mousePos(e);
+            points[drag].x += e.x - draggedPoint.x;
+            points[drag].y += e.y - draggedPoint.y;
+            draggedPoint = e;
+            drawCanvas();
+        }
+    }
+
+    // end dragging
+    function dragEnd(e) {
+        drag = null;
+        canvas1.style.cursor = "default";
+        drawCanvas();
+    }
+
+    // event parser
+    function mousePos(event) {
+        event = (event ? event : window.event);
+        return {
+            x: event.pageX - canvas1.offsetLeft,
+            y: event.pageY - canvas1.offsetTop
+        }
+    }
+
+    /**
+     * Start ("main method")
+     */
+
+    // Assign canvas and context variables
+    canvas1 = document.getElementById("canvas1");
+    context1 = canvas1.getContext("2d");
+
+    init();
+
+    /**
+     * Auxiliary functions
+     */
+
+    function buildArrays(n) {
+        combinationArray = [];
+        for (var i = 0; i <= n; i++) {
+            combinationArray[i] = [];
+        }
+        for (var i = 0; i <= n; i++) {
+            combinationArray[i][0] = 1;
+            combinationArray[i][i] = 1;
+        }
+
+        for (var i = 2; i <= n; i++) {
+            for (var j = 1; j < i; j++) {
+                combinationArray[i][j] = combinationArray[i - 1][j - 1] + combinationArray[i - 1][j];
+            }
+        }
+
+        tArray = [];
+        for (var i = 0; i <= step; i++) {
+            tArray[i] = [];
+        }
+        for (var i = 0; i <= step; i++) {
+            tArray[i][0] = 1;
+        }
+
+        for (var i = 0; i <= step; i++) {
+            for (var j = 1; j <= n; j++) {
+                tArray[i][j] = tArray[i][j - 1] * (i / step);
+            }
+        }
+    }
+
+    function multiply(p, s) {
+        return {x: p.x * s, y: p.y * s};
+    }
+
+    function subtract(a, b) {
+        return {x: a.x - b.x, y: a.y - b.y};
+    }
+
+    function drawBezier(ctx, style, points) {
+        var startPoint = points[0];
+        var currentPoint;
+        ctx.lineWidth = style.curve.width;
+        ctx.strokeStyle = style.curve.color;
+        ctx.beginPath();
+        ctx.moveTo(startPoint.x, startPoint.y);
+        var subCurve = [points[0], points[1], points[2], points[3]];
+        for (var i = 4; i < points.length - 2; i++) {
+            for (var t = 0; t <= step; t++) {
+                currentPoint = makeBezier(t, subCurve);
+                ctx.lineTo(currentPoint.x, currentPoint.y);
+                ctx.moveTo(currentPoint.x, currentPoint.y);
+            }
+            subCurve[0] = subCurve[3];
+            subCurve[1] = subtract(multiply(subCurve[3], 2), subCurve[2]);
+            subCurve[2] = points[i + 1];
+            subCurve[3] = points[i + 2];
+        }
+        for (t = 0; t <= step; t++) {
+            currentPoint = makeBezier(t, subCurve);
+            ctx.lineTo(currentPoint.x, currentPoint.y);
+            ctx.moveTo(currentPoint.x, currentPoint.y);
+        }
+        ctx.stroke();
+    }
+
+    function makeBezier(i, points) {
+        var n = points.length - 1;
+        var point = {x: 0, y: 0};
+        for (var k = 0; k <= n; k++) {
+            var b = combinationArray[n][k] * tArray[i][k] * tArray[step - i][n - k];
+            point.x += points[k].x * b;
+            point.y += points[k].y * b;
+        }
+        return point;
+    }
+
+    function addPoint() {
+        n = n + 1;
+        var x = parseFloat(document.getElementById("pointX").value);
+        var y = parseFloat(document.getElementById("pointY").value);
+        points[points.length] = {x: x, y: y};
+        drawCanvas();
+    }
+
+    function addCurve() {
+
+            var newCurve = [];
+            var randomX, randomY;
+            for (var i = 0; i < 4; i++) {
+                randomX = Math.random() * 800;
+                randomY = Math.random() * 600;
+                newCurve[newCurve.length] = {x: randomX, y: randomY};
+            }
+            curves[curves.length] = newCurve;
+            drawCanvas();
+    }
+
+    function deletePoint() {
+        if (points.length > 4) {
+            points.splice(n, n);
+            n = n - 1;
+        }
+        drawCanvas();
+    }
+
+    function field() {
+        var text = "New curve:<br>";
+        text += "<br>";
+        text += "<button type=\"button\" onclick=\"addCurve()\">Add new curve</button>";
+        return text;
+    }
+
+
+</script>
+</body>
+</html>
